@@ -1,6 +1,7 @@
 -- camunda tngp protocol
 
 local DEBUG = false
+local STATS = false
 local TNGP_PORT = 8880
 
 local debug = function() end
@@ -12,6 +13,16 @@ local function configureDebug()
     end
 end
 configureDebug()
+
+local stats = function() end
+local function configureStats()
+    if STATS then
+        stats = function(...)
+            info(table.concat({"STATS: ", ...}, " "))
+        end
+    end
+end
+configureStats()
 
 -- Protocol constants
 --
@@ -98,9 +109,10 @@ end
 -- Protocol dissection
 --
 
-local function dissect_transport_request(tvbuf, root, offset, length)
+local function dissect_transport_request(tvbuf, root, offset, length, timestamp, is_request)
     debug("dissect transport request")
     debug("request:", length)
+    debug("timestamp:", timestamp)
 
     -- We start by adding our protocol to the dissection display tree.
     local tree = root:add(transport_request_proto, tvbuf:range(offset, length))
@@ -111,7 +123,10 @@ local function dissect_transport_request(tvbuf, root, offset, length)
 
     -- dissect the request field
     local request_tvbr = tvbuf:range(offset + 8, 8)
+    local request_val = request_tvbr:le_uint64()
     tree:add_le(transport_request_fields.request, request_tvbr)
+    local type_string = (is_request) and "request" or "response"
+    stats(tostring(request_val), timestamp, type_string)
 
     -- dissect the data field
     local data_len = length - 16
@@ -127,7 +142,10 @@ local function dissect_data_frame(tvbuf, pktinfo, root, offset)
         return length_total
     end
     debug("data frame found:", length_val, "(", length_total, ")")
-    debug("timestamp:", tostring(pktinfo.cols))
+    local timestamp = pktinfo.abs_ts
+    debug("timestamp:", timestamp)
+    local is_request = pktinfo.dst_port == TNGP_PORT
+    debug("is request:", is_request)
 
     pktinfo.cols.protocol:set("TNGP")
 
@@ -135,7 +153,11 @@ local function dissect_data_frame(tvbuf, pktinfo, root, offset)
     -- for this frame/packet, because this function can be called multiple
     -- times per packet/Tvb
     if string.find(tostring(pktinfo.cols.info), "^Camunda TNGP") == nil then
-        pktinfo.cols.info:set("Camunda TNGP")
+        if is_request then
+            pktinfo.cols.info:set("Camunda TNGP Request")
+        else
+            pktinfo.cols.info:set("Camunda TNGP Response")
+        end
     end
 
     -- We start by adding our protocol to the dissection display tree.
@@ -164,7 +186,7 @@ local function dissect_data_frame(tvbuf, pktinfo, root, offset)
     local body_offset = offset + DATA_FRAME_LENGTH
     -- dissect transport request
     if ftype_val == 0 then
-        dissect_transport_request(tvbuf, root, body_offset, length_val)
+        dissect_transport_request(tvbuf, root, body_offset, length_val, timestamp, is_request)
     elseif length_val > 0 then
         local tree = root:add(dummy_proto, tvbuf:range(body_offset, length_val))
     end
