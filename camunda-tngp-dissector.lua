@@ -36,6 +36,7 @@ local msgtype_valstr = register_msg_types()
 -- Protocol declaration
 local data_frame_proto = Proto("camunda-tngp-data-frame","Camunda TNGP Data Frame")
 local transport_request_proto = Proto("camunda-tngp-transport-request", "Camunda TNGP Transport Request")
+local dummy_proto = Proto("camunda-tngp-dummy", "Camunda TNGP Dummy")
 
 local data_frame_fields = {
     length = ProtoField.uint32("tngp.data.frame.length", "Length"),
@@ -43,6 +44,7 @@ local data_frame_fields = {
     flags = ProtoField.uint8("tngp.data.frame.flags", "Flags"),
     ftype = ProtoField.uint16("tngp.data.frame.type", "Type", base.DEC, msgtype_valstr),
     stream = ProtoField.uint32("tngp.data.frame.stream", "Stream Id"),
+    padding = ProtoField.uint32("tngp.transport.request.padding", "Padding"),
 }
 data_frame_proto.fields = data_frame_fields
 
@@ -50,10 +52,13 @@ local transport_request_fields = {
     connection = ProtoField.uint64("tngp.transport.request.connection", "Connection Id"),
     request = ProtoField.uint64("tngp.transport.request.request", "Request Id"),
     data = ProtoField.bytes("tngp.transport.request.data", "Data"),
-    padding = ProtoField.uint32("tngp.transport.request.padding", "Padding"),
 }
 transport_request_proto.fields = transport_request_fields
 
+local dummy_fields = {
+    data = ProtoField.bytes("tngp.dummy.data", "Data"),
+}
+dummy_proto.fields = dummy_fields
 
 -- helper methods
 
@@ -93,12 +98,12 @@ end
 -- Protocol dissection
 --
 
-local function dissect_transport_request(tvbuf, root, offset, length, padding)
+local function dissect_transport_request(tvbuf, root, offset, length)
     debug("dissect transport request")
-    debug("request:", length, "(", padding, ")")
+    debug("request:", length)
 
     -- We start by adding our protocol to the dissection display tree.
-    local tree = root:add(transport_request_proto, tvbuf:range(offset, length + padding))
+    local tree = root:add(transport_request_proto, tvbuf:range(offset, length))
 
     -- dissect the connection field
     local connection_tvbr = tvbuf:range(offset, 8)
@@ -113,10 +118,6 @@ local function dissect_transport_request(tvbuf, root, offset, length, padding)
     local data_tvbr = tvbuf:range(offset + 16, data_len)
     local data_val = data_tvbr:string()
     tree:add(transport_request_fields.data, data_tvbr, data_val, nil, "(" .. data_len .. " Bytes)")
-
-    -- dissect the padding field
-    local padding_tvbr = tvbuf:range(offset + length, padding)
-    tree:add(transport_request_fields.padding, padding_tvbr, padding, nil, "Bytes")
 end
 
 local function dissect_data_frame(tvbuf, pktinfo, root, offset)
@@ -126,6 +127,7 @@ local function dissect_data_frame(tvbuf, pktinfo, root, offset)
         return length_total
     end
     debug("data frame found:", length_val, "(", length_total, ")")
+    debug("timestamp:", tostring(pktinfo.cols))
 
     pktinfo.cols.protocol:set("TNGP")
 
@@ -156,14 +158,24 @@ local function dissect_data_frame(tvbuf, pktinfo, root, offset)
     tree:add_le(data_frame_fields.ftype, ftype_tvbr)
 
     -- dissect the type field
-    local stream_id_tvbr = tvbuf:range(offset + 7, 4)
+    local stream_id_tvbr = tvbuf:range(offset + 8, 4)
     tree:add_le(data_frame_fields.stream, stream_id_tvbr)
 
+    local body_offset = offset + DATA_FRAME_LENGTH
     -- dissect transport request
     if ftype_val == 0 then
-        local padding = length_total - DATA_FRAME_LENGTH - length_val
-        dissect_transport_request(tvbuf, root, offset + 11, length_val, padding)
+        dissect_transport_request(tvbuf, root, body_offset, length_val)
+    elseif length_val > 0 then
+        local tree = root:add(dummy_proto, tvbuf:range(body_offset, length_val))
     end
+
+    local padding = length_total - DATA_FRAME_LENGTH - length_val
+    debug("padding:", padding)
+
+    -- add padding
+
+    local padding_tvbr = tvbuf:range(offset + DATA_FRAME_LENGTH + length_val, padding)
+    root:add(data_frame_fields.padding, padding_tvbr, padding, nill, "Bytes")
 
     return length_total
 end
