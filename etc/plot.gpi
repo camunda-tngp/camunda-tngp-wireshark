@@ -1,0 +1,11 @@
+set terminal pngcairo size 1024,768 enhanced
+set output 'request.png'
+
+set grid ytics mytics
+set ylabel "reponse time in seconds"
+set xlabel "requests"
+set yrange [0:0.05]
+set xrange [1000:]
+set mytics 10
+
+plot '/tmp/request.data' using 1:2 with points notitle
