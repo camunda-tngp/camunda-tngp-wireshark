@@ -2,7 +2,7 @@
 
 local DEBUG = false
 local STATS = false
-local TNGP_PORT = 8880
+local TNGP_PORT = 51015
 
 local debug = function() end
 local function configureDebug()
