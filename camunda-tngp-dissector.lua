@@ -60,6 +60,7 @@ local data_frame_fields = {
 data_frame_proto.fields = data_frame_fields
 
 local transport_request_fields = {
+    rtype = ProtoField.string("tngp.transport.request.type", "Type"),
     connection = ProtoField.uint64("tngp.transport.request.connection", "Connection Id"),
     request = ProtoField.uint64("tngp.transport.request.request", "Request Id"),
     data = ProtoField.bytes("tngp.transport.request.data", "Data"),
@@ -120,6 +121,11 @@ local function dissect_transport_request(tvbuf, root, offset, length, timestamp,
     -- dissect the connection field
     local connection_tvbr = tvbuf:range(offset, 8)
     tree:add_le(transport_request_fields.connection, connection_tvbr)
+    if is_request then
+        tree:add(transport_request_fields.rtype, "request")
+    else
+        tree:add(transport_request_fields.rtype, "response")
+    end
 
     -- dissect the request field
     local request_tvbr = tvbuf:range(offset + 8, 8)

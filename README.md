@@ -21,6 +21,9 @@ docker build -t tshark .
 
 # run tshark with linked pcap file
 docker run --rm -v $PWD/tngp.pcap:/tngp.pcap tshark -r /tngp.pcap
+
+# only outputs transport requests with the timestamp, request id and type
+docker run --rm -v $PWD/tngp.pcap:/tngp.pcap tshark -r /tngp.pcap -T fields -e frame.time_epoch -e tngp.transport.request.request -e tngp.transport.request.type tngp.transport.request.request!=0
 ```
 
 
