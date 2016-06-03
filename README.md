@@ -10,7 +10,7 @@
 
 ```
 mkdir -p ~/.wireshark/plugins/
-git clone git@github.com:menski/camunda-tngp-wireshark.git ~/.wireshark/plugins/camunda-tngp-wireshark
+git clone git@github.com:camunda-tngp/camunda-tngp-wireshark.git ~/.wireshark/plugins/camunda-tngp-wireshark
 ```
 
 ## Screenshot
