@@ -1,5 +1,9 @@
 # Camunda TNGP Protocol Wireshark Dissector
 
+## Status
+
+This project is **UNMAINTAINED**.
+
 ## Requirements
 
 - Wireshark with Lua Support (Lua >= 5.2)
